@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>OMS Dealers</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#f4f7fc;
+    color:#1e293b;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+    position:fixed;
+    left:0;
+    top:0;
+    width:230px;
+    height:100vh;
+    background:linear-gradient(180deg,#0f172a,#1e293b);
+    color:#fff;
+    padding:20px;
+    overflow-y:auto;
+}
+
+.logo{
+    font-size:22px;
+    font-weight:700;
+    text-align:center;
+    margin-bottom:30px;
+}
+
+.sidebar ul{
+    list-style:none;
+}
+
+.sidebar li{
+    padding:14px 15px;
+    margin-bottom:8px;
+    border-radius:10px;
+    cursor:pointer;
+    transition:.3s;
+}
+
+.sidebar li:hover{
+    background:#2563eb;
+}
+
+.active-menu{
+    background:#2563eb;
+}
+
+.sidebar a{
+    text-decoration:none;
+    color:white;
+    font-weight:600;
+}
+
+.logout-btn{
+    width:100%;
+    margin-top:20px;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:#ef4444;
+    color:#fff;
+    cursor:pointer;
+}
+
+/* MAIN */
+
+.main{
+    margin-left:230px;
+    padding:20px;
+}
+
+/* HEADER */
+
+.topbar{
+    background:#fff;
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 5px 20px rgba(0,0,0,.08);
+}
+
+.topbar h2{
+    font-size:22px;
+}
+
+.topbar small{
+    color:#64748b;
+}
+
+/* CARD */
+
+.section{
+    margin-top:20px;
+    background:#fff;
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 5px 20px rgba(0,0,0,.08);
+}
+
+/* HEADER AREA */
+
+.page-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:15px;
+}
+
+.page-header h3{
+    font-size:20px;
+}
+
+.add-btn{
+    border:none;
+    background:#2563eb;
+    color:white;
+    padding:10px 18px;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:600;
+}
+
+.add-btn:hover{
+    background:#1d4ed8;
+}
+
+/* SEARCH */
+
+.search-box{
+    width:100%;
+    padding:12px;
+    border:1px solid #d1d5db;
+    border-radius:10px;
+    margin-bottom:15px;
+}
+
+/* TABLE */
+
+.table-wrapper{
+    overflow-x:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:900px;
+}
+
+th{
+    background:#f8fafc;
+    color:#475569;
+}
+
+th,
+td{
+    padding:12px;
+    border-bottom:1px solid #e2e8f0;
+    text-align:left;
+}
+
+tr:hover{
+    background:#f8fafc;
+}
+
+/* STATUS */
+
+.status-active{
+    background:#dcfce7;
+    color:#166534;
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:12px;
+    font-weight:600;
+}
+
+/* MOBILE */
+
+@media(max-width:768px){
+
+.sidebar{
+    width:70px;
+    padding:10px;
+}
+
+.logo{
+    font-size:12px;
+}
+
+.sidebar li{
+    font-size:10px;
+    text-align:center;
+    padding:10px 5px;
+}
+
+.main{
+    margin-left:70px;
+    padding:10px;
+}
+
+.topbar{
+    padding:15px;
+}
+
+.topbar h2{
+    font-size:18px;
+}
+
+.page-header{
+    flex-direction:column;
+    align-items:stretch;
+}
+
+.add-btn{
+    width:100%;
+}
+
+table{
+    min-width:800px;
+}
+
+th,
+td{
+    font-size:12px;
+    padding:10px;
+}
+
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+
+<div class="logo">
+OMS SYSTEM
+</div>
+
+<ul>
+
+<a href="sales/salesdashboard.html">
+<li>Dashboard</li>
+</a>
+
+<a href="sales/create-order.html">
+<li>Orders</li>
+</a>
+
+<a href="dealer.html">
+<li class="active-menu">Dealers</li>
+</a>
+
+<a href="products.html">
+<li>Products</li>
+</a>
+
+<a href="sales/salesreport.html">
+<li>Reports</li>
+</a>
+
+</ul>
+
+<button onclick="logout()" class="logout-btn">
+Logout
+</button>
+
+</div>
+
+<div class="main">
+
+<div class="topbar">
+
+<h2>
+Welcome,
+<span id="welcomeName">Loading...</span>
+</h2>
+
+<small>
+Role:
+<span id="userRole">Loading...</span>
+</small>
+
+</div>
+
+<div class="section">
+
+<div class="page-header">
+
+<h3>Dealer List</h3>
+
+<button id="addDealerBtn" class="add-btn">
++ Add Dealer
+</button>
+
+</div>
+
+<input
+type="text"
+id="dealerSearch"
+class="search-box"
+placeholder="Search Dealer..."
+onkeyup="searchDealers()">
+
+<div class="table-wrapper">
+
+<table>
+
+<thead>
+
+<tr>
+<th>SN</th>
+<th>Dealer Code</th>
+<th>Dealer Name</th>
+<th>Mobile</th>
+<th>Address</th>
+<th>Salesperson</th>
+<th>Status</th>
+<th id="actionHeader">Action</th>
+</tr>
+
+</thead>
+
+<tbody id="dealerTable">
+
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+
+
+
+
+
+<script>
+
+const SUPABASE_URL =
+"https://opaesbbawyzegoawnlaz.supabase.co";
+
+const SUPABASE_KEY =
+"sb_publishable_6BikaemYS93iFw8b1tezjw_LG2G1rgN";
+
+const s =
+supabase.createClient(
+SUPABASE_URL,
+SUPABASE_KEY
+);
+
+let currentUser = null;
+let allDealers = [];
+
+async function loadCurrentUser(){
+
+const {
+data:{user}
+} = await s.auth.getUser();
+
+const { data } = await s
+.from("users")
+.select("*")
+.eq("email",user.email)
+.single();
+
+currentUser = data;
+
+document.getElementById(
+"welcomeName"
+).innerText =
+currentUser.full_name;
+
+document.getElementById(
+"userRole"
+).innerText =
+currentUser.role;
+
+if(currentUser.role !== "Admin"){
+
+document.getElementById(
+"addDealerBtn"
+).style.display = "none";
+
+document.getElementById(
+"actionHeader"
+).style.display = "none";
+
+}
+
+}
+
+async function loadDealers(){
+
+let query =
+s.from("dealers")
+.select("*");
+
+if(currentUser.role !== "Admin"){
+
+query =
+query.eq(
+"salesperson",
+currentUser.full_name
+);
+
+}
+
+const {
+data,
+error
+} = await query;
+
+if(error){
+
+console.log(error);
+return;
+
+}
+
+allDealers = data || [];
+
+renderDealers(allDealers);
+
+}
+
+function renderDealers(data){
+
+let html = "";
+
+data.forEach((d,index)=>{
+
+let actionHTML =
+`<button onclick="viewDealer('${d.id}')">
+View
+</button>`;
+
+if(currentUser.role === "Admin"){
+
+actionHTML += `
+<button onclick="editDealer('${d.id}')">
+Edit
+</button>
+
+<button onclick="deleteDealer('${d.id}')">
+Delete
+</button>
+`;
+
+}
+
+html += `
+<tr>
+
+<td>${index+1}</td>
+
+<td>${d.dealer_code}</td>
+
+<td>${d.dealer_name}</td>
+
+<td>${d.mobile || ''}</td>
+
+<td>${d.address || ''}</td>
+
+<td>${d.salesperson || ''}</td>
+
+<td>${d.status || ''}</td>
+
+${currentUser.role==="Admin"
+? `<td>${actionHTML}</td>`
+: ""}
+
+</tr>
+`;
+
+});
+
+document.getElementById(
+"dealerTable"
+).innerHTML = html;
+
+}
+
+function searchDealers(){
+
+const keyword =
+document.getElementById(
+"dealerSearch"
+).value.toLowerCase();
+
+const filtered =
+allDealers.filter(d=>
+
+(d.dealer_name || "")
+.toLowerCase()
+.includes(keyword)
+
+||
+
+(d.dealer_code || "")
+.toLowerCase()
+.includes(keyword)
+
+);
+
+renderDealers(filtered);
+
+}
+
+function viewDealer(id){
+
+alert(
+"Dealer Details Popup Coming Next"
+);
+
+}
+
+function editDealer(id){
+
+alert(
+"Edit Dealer Coming Next"
+);
+
+}
+
+function deleteDealer(id){
+
+alert(
+"Delete Dealer Coming Next"
+);
+
+}
+
+(async()=>{
+
+await loadCurrentUser();
+
+await loadDealers();
+
+})();
+
+</script>
+<script>
+
+async function logout(){
+
+    await s.auth.signOut();
+
+    localStorage.clear();
+
+    window.location.href = "login.html";
+
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OMS Admin Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ======================
+// SUPABASE
+// ======================
+
+const SUPABASE_URL = "https://opaesbbawyzegoawnlaz.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_6BikaemYS93iFw8b1tezjw_LG2G1rgN";
+
+const s = supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+);
+
+// ======================
+// PAGE LOAD
+// ======================
+
+window.onload = async function () {
+
+    console.log("Dashboard Loading...");
+
+    await checkLogin();
+
+    await loadCurrentUser();
+
+    await loadDashboard();
+	await ApprovedOrders();
+
+};
+
+// ======================
+// LOGIN CHECK
+// ======================
+
+async function checkLogin() {
+
+    const {
+        data: { user }
+    } = await s.auth.getUser();
+
+    console.log("Logged User:", user);
+
+    if (!user) {
+
+        alert("Please Login");
+
+        window.location.href = "login.html";
+
+        return;
+    }
+}
+
+// ======================
+// CURRENT USER
+// ======================
+
+async function loadCurrentUser() {
+
+    try {
+
+        const {
+            data: { user }
+        } = await s.auth.getUser();
+
+        if (!user) return;
+
+        const { data, error } = await s
+            .from("users")
+            .select("*")
+            .eq("email", user.email)
+            .single();
+
+        if (error) {
+            console.log(error);
+            return;
+        }
+
+        console.log("Current User:", data);
+
+        document.getElementById("welcomeName").innerText =
+            data.full_name || "Admin";
+
+        document.getElementById("userRole").innerText =
+            data.role || "User";
+
+    } catch (err) {
+
+        console.log(err);
+
+    }
+}
+
+// ======================
+// KPI DATA
+// ======================
+
+async function loadDashboard() {
+
+    try {
+
+        const { count: users } = await s
+            .from("users")
+            .select("*", { count: "exact", head: true });
+
+        const { count: activeUsers } = await s
+            .from("users")
+            .select("*", { count: "exact", head: true })
+            .eq("status", "Active");
+
+        const { count: dealers } = await s
+            .from("dealers")
+            .select("*", { count: "exact", head: true });
+
+        const { count: products } = await s
+            .from("products")
+            .select("*", { count: "exact", head: true });
+
+        const { count: orders } = await s
+    .from("ordertake")
+    .select("*", { count: "exact", head: true });
+
+const { count: pending } = await s
+    .from("ordertake")
+    .select("*", { count: "exact", head: true })
+    .eq("Status", ["Pending", "Hold", "Reject"]);
+
+const { count: approved } = await s
+    .from("ordertake")
+    .select("*", { count: "exact", head: true })
+    .eq("Status", "Approved");
+
+const { count: hold } = await s
+    .from("ordertake")
+    .select("*", { count: "exact", head: true })
+    .eq("Status", "Hold");
+
+const { data: approvedOrders, error } = await s
+    .from("ordertake")
+    .select('"Net Amount"')
+    .eq("Status", "Approved");
+
+let sales = 0;
+
+(approvedOrders || []).forEach(order => {
+    sales += Number(order["Net Amount"] || 0);
+});
+
+        document.getElementById("usersCount").innerText = users || 0;
+
+        document.getElementById("activeUsersCount").innerText = activeUsers || 0;
+
+        document.getElementById("dealersCount").innerText =
+            dealers || 0;
+
+        document.getElementById("productsCount").innerText =
+            products || 0;
+
+        document.getElementById("ordersCount").innerText =
+            orders || 0;
+
+        document.getElementById("pendingOrdersCount").innerText =
+            pending || 0;
+
+        document.getElementById("approvedOrdersCount").innerText =
+            approved || 0;
+
+        document.getElementById("holdOrdersCount").innerText =
+            hold || 0;
+
+        document.getElementById("salesAmount").innerText =
+            sales.toLocaleString();
+
+        await loadPendingOrders();
+
+        await ApprovedOrders();
+
+        await loadRecentUsers();
+
+    } catch (err) {
+
+        console.log(err);
+
+    }
+}
+
+// ======================
+// TODAY ORDERS
+// ======================
+
+async function loadPendingOrders() {
+
+    const today = new Date().toISOString().split("T")[0];
+
+  const { data, error } = await s
+    .from("ordertake")
+    .select("*")
+    
+    .in("Status", ["Pending", "Hold", "Rejected"])
+    .order("id", { ascending: false });
+
+    if (error) {
+        console.log(error);
+        return;
+    }
+
+    let html = "";
+
+    (data || []).forEach(order => {
+
+        html += `
+        <tr>
+
+            <td>${order.id}</td>
+
+            <td>${order["Customer Name"] || ""}</td>
+
+            <td>${order["Product Name"] || ""}</td>
+
+            <td>${order["Salesperson"] || ""}</td>
+
+            <td>${order["Net Amount"] || 0}</td>
+
+            <td>
+                <span class="status-${(order["Status"] || "Pending").toLowerCase()}">
+                    ${order["Status"] || "Pending"}
+                </span>
+            </td>
+
+            <td>
+
+                <button class="approve"
+                onclick="changeStatus(${order.id},'Approved')">
+                Approve
+                </button>
+
+                <button class="hold"
+                onclick="changeStatus(${order.id},'Hold')">
+                Hold
+                </button>
+
+                <button class="reject"
+                onclick="changeStatus(${order.id},'Rejected')">
+                Reject
+                </button>
+
+            </td>
+
+        </tr>
+        `;
+    });
+
+    document.getElementById("pendingOrdersTable").innerHTML = html;
+}
+// ======================
+// CHANGE STATUS
+// ======================
+
+async function changeStatus(id, status) {
+
+    const { error } = await s
+        .from("ordertake")
+        .update({
+            "Status": status
+        })
+        .eq("id", id);
+
+    if (error) {
+        console.log(error);
+        alert(error.message);
+        return;
+    }
+
+    loadPendingOrders();
+	ApprovedOrder();		
+}
+
+
+// ======================
+// LOGOUT
+// ======================
+
+async function logout() {
+
+    await s.auth.signOut();
+
+    localStorage.clear();
+
+    window.location.href = "login.html";
+}
+//=======================
+//REFRESH  
+//=======================
+async function refreshKPIs() {
+
+    const { count: pending } = await s
+        .from("ordertake")
+        .select("*",{count:"exact",head:true})
+        .eq("Status","Pending");
+
+    const { count: approved } = await s
+        .from("ordertake")
+        .select("*",{count:"exact",head:true})
+        .eq("Status","Approved");
+
+    const { count: hold } = await s
+        .from("ordertake")
+        .select("*",{count:"exact",head:true})
+        .eq("Status","Hold");
+
+    const { data: approvedOrders } = await s
+        .from("ordertake")
+        .select('"Net Amount"')
+        .eq("Status","Approved");
+
+    let sales = 0;
+
+    (approvedOrders || []).forEach(row => {
+        sales += Number(row["Net Amount"] || 0);
+    });
+
+    document.getElementById("pendingOrdersCount").innerText =
+        pending || 0;
+
+    document.getElementById("approvedOrdersCount").innerText =
+        approved || 0;
+
+    document.getElementById("holdOrdersCount").innerText =
+        hold || 0;
+
+    document.getElementById("salesAmount").innerText =
+        sales.toLocaleString();
+	ApprovedOrders();
+}
+
+// ======================
+// TODAY APPROVED ORDERS
+// ======================
+async function ApprovedOrders() {
+
+    const today = new Date().toISOString().split("T")[0];
+
+  const { data, error } = await s
+    .from("ordertake")
+    .select("*")
+    
+    .in("Status", ["Approved", "DONE", "OK"])
+    .order("id", { ascending: false });
+
+    if (error) {
+        console.log(error);
+        return;
+    }
+
+    let html = "";
+
+    (data || []).forEach(order => {
+
+        html += `
+        <tr>
+
+            <td>${order.id}</td>
+
+            <td>${order["Customer Name"] || ""}</td>
+
+            <td>${order["Product Name"] || ""}</td>
+
+            <td>${order["Salesperson"] || ""}</td>
+
+            <td>${order["Net Amount"] || 0}</td>
+
+            <td>
+                <span class="status-${(order["Status"] || "Approved").toLowerCase()}">
+                    ${order["Status"] || "Approved"}
+                </span>
+            </td>
+
+            <td>
+
+
+
+                <button class="hold"
+                onclick="changeStatus(${order.id},'Hold')">
+                Hold
+                </button>
+
+                <button class="reject"
+                onclick="changeStatus(${order.id},'Rejected')">
+                Reject
+                </button>
+
+            </td>
+
+        </tr>
+        `;
+    });
+
+    document.getElementById("approvedorder").innerHTML = html;
+}
+
+
+
+
+
+</script>
+
+
+
+    <style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#f4f7fc;
+    color:#1e293b;
+}
+
+/* ================= SIDEBAR ================= */
+
+.sidebar{
+    position:fixed;
+    left:0;
+    top:0;
+    width:230px;
+    height:100vh;
+    background:linear-gradient(180deg,#0f172a,#1e293b);
+    color:#fff;
+    padding:20px;
+    box-shadow:4px 0 20px rgba(0,0,0,.15);
+    overflow-y:auto;
+}
+
+.logo{
+    font-size:22px;
+    font-weight:700;
+    text-align:center;
+    margin-bottom:30px;
+}
+
+.sidebar ul{
+    list-style:none;
+}
+
+.sidebar li{
+    padding:14px 15px;
+    margin-bottom:8px;
+    border-radius:10px;
+    cursor:pointer;
+    transition:.3s;
+    font-size:14px;
+}
+
+.sidebar li:hover{
+    background:#2563eb;
+}
+
+.logout-btn{
+    width:100%;
+    margin-top:20px;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:#ef4444;
+    color:white;
+    cursor:pointer;
+    font-size:14px;
+    font-weight:600;
+}
+
+.logout-btn:hover{
+    background:#dc2626;
+}
+
+/* ================= MAIN ================= */
+
+.main{
+    margin-left:230px;
+    padding:20px;
+}
+
+/* ================= TOPBAR ================= */
+
+.topbar{
+    background:#fff;
+    border-radius:16px;
+    padding:20px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    box-shadow:0 5px 20px rgba(0,0,0,.08);
+}
+
+.topbar h2{
+    font-size:22px;
+}
+
+.topbar small{
+    color:#64748b;
+}
+
+/* ================= KPI ================= */
+
+.kpi{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:15px;
+    margin-top:20px;
+}
+
+.card{
+    background:#fff;
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 5px 20px rgba(0,0,0,.08);
+    border:1px solid #eef2f7;
+    transition:.3s;
+}
+
+.card:hover{
+    transform:translateY(-4px);
+}
+
+.card h4{
+    font-size:12px;
+    color:#64748b;
+    font-weight:600;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.card h1{
+    margin-top:10px;
+    font-size:30px;
+    font-weight:700;
+    color:#0f172a;
+}
+
+/* ================= SECTION ================= */
+
+.section{
+    margin-top:20px;
+    background:#fff;
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 5px 20px rgba(0,0,0,.08);
+    overflow-x:auto;
+}
+
+.section h3{
+    margin-bottom:15px;
+    font-size:18px;
+}
+
+/* ================= TABLE ================= */
+
+table{
+    width:100%;
+    min-width:900px;
+    border-collapse:collapse;
+}
+
+th{
+    background:#f8fafc;
+    color:#475569;
+    font-size:13px;
+    font-weight:600;
+}
+
+th,
+td{
+    padding:14px;
+    border-bottom:1px solid #e2e8f0;
+    text-align:left;
+    font-size:14px;
+}
+
+tr:hover{
+    background:#f8fafc;
+}
+
+/* ================= STATUS BUTTONS ================= */
+
+.approve,
+.hold,
+.reject{
+
+    border:none;
+    min-width:60px;
+    height:28px;
+    padding:0 8px;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:8px;
+    font-weight:600;
+    margin-right:4px;
+}
+
+.approve{
+    background:#dcfce7;
+    color:#166534;
+}
+
+.hold{
+    background:#fef3c7;
+    color:#92400e;
+}
+
+.reject{
+    background:#fee2e2;
+    color:#991b1b;
+}
+
+/* ================= BADGES ================= */
+
+.badge{
+    padding:5px 10px;
+    border-radius:20px;
+    font-size:12px;
+    font-weight:600;
+}
+
+.badge-pending{
+    background:#fef3c7;
+    color:#92400e;
+}
+
+.badge-approved{
+    background:#dcfce7;
+    color:#166534;
+}
+
+.badge-rejected{
+    background:#fee2e2;
+    color:#991b1b;
+}
+
+.badge-hold{
+    background:#fde68a;
+    color:#92400e;
+}
+
+/* ================= SCROLLBAR ================= */
+
+::-webkit-scrollbar{
+    width:8px;
+    height:8px;
+}
+
+::-webkit-scrollbar-track{
+    background:#f1f5f9;
+}
+
+::-webkit-scrollbar-thumb{
+    background:#cbd5e1;
+    border-radius:10px;
+}
+
+/* ================= MOBILE ================= */
+
+@media(max-width:768px){
+
+    .sidebar{
+        width:70px;
+        padding:10px;
+    }
+
+    .logo{
+        font-size:14px;
+        margin-bottom:20px;
+    }
+
+    .sidebar li{
+        font-size:10px;
+        text-align:center;
+        padding:10px 4px;
+    }
+
+    .logout-btn{
+        font-size:10px;
+        padding:8px;
+    }
+
+    .main{
+        margin-left:70px;
+        padding:10px;
+    }
+
+    .topbar{
+        padding:15px;
+    }
+
+    .topbar h2{
+        font-size:18px;
+    }
+
+    .kpi{
+        grid-template-columns:repeat(2,1fr);
+        gap:10px;
+    }
+
+    .card{
+        padding:15px;
+    }
+
+    .card h4{
+        font-size:10px;
+    }
+
+    .card h1{
+        font-size:22px;
+    }
+
+    table{
+        min-width:850px;
+    }
+
+    th,
+    td{
+        font-size:12px;
+        padding:10px;
+    }
+
+    .approve,
+    .hold,
+    .reject,
+    .activeApprove,
+    .activeHold,
+    .activeReject{
+        min-width:75px;
+        height:32px;
+        font-size:11px;
+    }
+}
+.status-approved{
+background:#dcfce7;
+color:#166534;
+padding:6px 12px;
+border-radius:20px;
+font-size:12px;
+font-weight:600;
+}
+
+.status-hold{
+background:#fef3c7;
+color:#92400e;
+padding:6px 12px;
+border-radius:20px;
+font-size:12px;
+font-weight:600;
+}
+
+.status-rejected{
+background:#fee2e2;
+color:#991b1b;
+padding:6px 12px;
+border-radius:20px;
+font-size:12px;
+font-weight:600;
+}
+
+.status-pending{
+background:#dbeafe;
+color:#1d4ed8;
+padding:6px 12px;
+border-radius:20px;
+font-size:12px;
+font-weight:600;
+}
+
+
+.refresh-btn{
+
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+
+    padding:10px 16px;
+
+    border:none;
+    border-radius:10px;
+
+    background:linear-gradient(135deg,#2563eb,#1d4ed8);
+
+    color:#fff;
+
+    font-size:13px;
+    font-weight:600;
+
+    cursor:pointer;
+
+    box-shadow:0 4px 12px rgba(37,99,235,.25);
+
+    transition:all .25s ease;
+}
+
+.refresh-btn:hover{
+
+    transform:translateY(-2px);
+
+    box-shadow:0 8px 18px rgba(37,99,235,.35);
+}
+
+.refresh-btn:active{
+
+    transform:scale(.97);
+}
+
+.refresh-btn:before{
+
+    content:"↻";
+
+    font-size:14px;
+    font-weight:700;
+}
+</style>
+
+  
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <div class="logo">
+        OMS SYSTEM
+    </div>
+
+    <ul>
+        <li>Dashboard</li>
+        <li>Orders</li>
+
+        <a href="dealer	.html" style="color:white;text-decoration:none;font-weight:600;"
+onmouseover="this.style.color='#FFFFFF'"
+onmouseout="this.style.color='#ffffff'"><li>Dealers</li></a>
+        
+        <li>Products</li>
+        <li>Users</li>
+        <li>Reports</li>
+        <li>Settings</li>
+    </ul>
+
+    <button onclick="logout()" class="logout-btn">
+        Logout
+    </button>
+
+</div>
+
+<div class="main">
+
+    <div class="topbar">
+
+        <div>
+            <h2>
+                Welcome,
+                <span id="welcomeName">Loading...</span>
+            </h2>
+
+            <small>
+                Role:
+                <span id="userRole">Loading...</span>
+            </small>
+        </div>
+
+    </div>
+
+    <!-- KPI -->
+
+    <div class="kpi">
+
+        <div class="card">
+            <h4>Total Users</h4>
+            <h1 id="usersCount">0</h1>
+        </div>
+
+        <div class="card">
+            <h4>Active Users</h4>
+            <h1 id="activeUsersCount">0</h1>
+        </div>
+
+        <div class="card">
+            <h4>Total Dealers</h4>
+            <h1 id="dealersCount">0</h1>
+        </div>
+
+        <div class="card">
+            <h4>Products</h4>
+            <h1 id="productsCount">0</h1>
+        </div>
+
+        <div class="card">
+            <h4>Total Orders</h4>
+            <h1 id="ordersCount">0</h1>
+        </div>
+
+        <div class="card">
+            <h4>Pending Orders</h4>
+            <h1 id="pendingOrdersCount">0</h1>
+        </div>
+
+        <div class="card">
+            <h4>Approved Orders</h4>
+            <h1 id="approvedOrdersCount">0</h1>
+        </div>
+
+        <div class="card">
+            <h4>Hold Orders</h4>
+            <h1 id="holdOrdersCount">0</h1>
+        </div>
+
+        <div class="card">
+            <h4>Total Sales</h4>
+            <h1 id="salesAmount">0</h1>
+        </div>
+<div class="card">
+	<button class="refresh-btn" onclick="refreshKPIs()">
+    🔄 Refresh KPI
+</button>
+</div>
+    </div>
+
+    <!-- Pending Orders -->
+
+    <div class="section">
+
+        <h3>Pending Orders For Approval</h3>
+
+        <table>
+
+       <thead>
+<tr>
+<th>Order No</th>
+<th>Dealer</th>
+<th>Product Name</th>
+<th>Salesperson</th>
+<th>Amount</th>
+<th>Action</th>
+</tr>
+</thead>
+
+            <tbody id="pendingOrdersTable"></tbody>
+
+        </table>
+
+    </div>
+
+<!-- Approved Orders -->
+
+    <div class="section">
+
+        <h3>Today's Approved Orders</h3>
+
+        <table>
+
+       <thead>
+<tr>
+<th>Order No</th>
+<th>Dealer</th>
+<th>Product Name</th>
+<th>Salesperson</th>
+<th>Amount</th>
+<th>Action</th>
+</tr>
+</thead>
+
+            <tbody id="approvedorder"></tbody>
+
+        </table>
+
+    </div>
+
+    <!-- Recent Users -->
+
+    <div class="section">
+
+        <h3>Recent Users</h3>
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+
+            <tbody id="recentUsersTable"></tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+</body>
+</html>
